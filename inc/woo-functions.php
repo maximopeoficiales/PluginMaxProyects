@@ -214,35 +214,37 @@ function action_woocommerce_admin_order_data_after_shipping_address()
 {
      $data = getDataConfig();
      $woocommerce = max_functions_getWoocommerce();
-     $func = function ($e) {
-          if ($e->key == "ce_longitud") {
-               return $e;
-          }
-     };
      if ($data["api_key_google_maps"] != "") {
 ?>
           <?php if (!$_GET["post_type"]) {
                $id_order = $_GET["post"];
                $order = $woocommerce->get("orders/$id_order");
-               if (!strpos($order->created_via, "ywraq")) {
-                    $coordenadas = array();
-                    foreach ($order->meta_data as $e) {
-                         if ($e->key == "ce_latitud") {
-                              array_push($coordenadas, $e);
-                         }
-                         if ($e->key == "ce_longitud") {
-                              array_push($coordenadas, $e);
-                         }
+
+               $coordenadas = array();
+               foreach ($order->meta_data as $e) {
+                    if ($e->key == "ce_latitud") {
+                         array_push($coordenadas, $e);
                     }
+                    if ($e->key == "ce_longitud") {
+                         array_push($coordenadas, $e);
+                    }
+               }
+               if (!isset($coordenadas)) {
                     $latitud = $coordenadas[0]->value;
                     $longitud = $coordenadas[1]->value;
                     $link_google = "https://maps.google.com/?q=" . $latitud . "," . $longitud;
+
+
           ?>
                     <!-- CAMPO url Gmaps -->
                     <p id="url_mapa"><a href="<?= $link_google ?>"><?= $link_google ?></a></p>
-                    <!-- campo url gmaps -->
-                    <!-- bloque de codigo -->
-                    <!-- estilos para el modal -->
+               <?php     } ?>
+               <!-- campo url gmaps -->
+               <!-- bloque de codigo -->
+               <!-- estilos para el modal -->
+               <?php if ($order->shipping->address_1 !== "") {
+                    # code...
+               ?>
                     <style>
                          * {
                               margin: 0;
@@ -357,8 +359,10 @@ function action_woocommerce_admin_order_data_after_shipping_address()
                                                                  </div>
                                                                  <div class="wc-order-preview-address">
                                                                       <h2>Detalles de envío</h2>
-                                                                      <a href="<?= $link_google ?>" target="_blank"><?= $link_google ?></a>
-
+                                                                      <?php if (!isset($coordenadas)) { ?>
+                                                                           <a href="<?= $link_google ?>" target="_blank"><?= $link_google ?></a>
+                                                                      <?php
+                                                                      } ?>
                                                                       <div style="margin-top: 5px;">
                                                                            <strong>Método de envío</strong>
                                                                            Se aplicarán costos de envío según tu dirección en la siguiente página.
@@ -400,7 +404,10 @@ function action_woocommerce_admin_order_data_after_shipping_address()
                                                                       </table>
                                                                  </div>
                                                             </div>
-                                                            <img src="https://maps.googleapis.com/maps/api/staticmap?center=<?= $latitud ?>,<?= $longitud ?>&zoom=16&size=600x400&markers=color:red%7C<?= $latitud ?>,<?= $longitud ?>&key=<?= $data["api_key_google_maps"] ?>" width="100%" height="400px" />
+                                                            <?php if (!isset($coordenadas)) { ?>
+                                                                 <img src="https://maps.googleapis.com/maps/api/staticmap?center=<?= $latitud ?>,<?= $longitud ?>&zoom=16&size=600x400&markers=color:red%7C<?= $latitud ?>,<?= $longitud ?>&key=<?= $data["api_key_google_maps"] ?>" width="100%" height="400px" />
+                                                            <?php
+                                                            } ?>
                                                        </article>
                                                        <footer>
                                                             <div class="inner">
@@ -508,7 +515,7 @@ function action_woocommerce_admin_order_data_after_shipping_address()
                     </script>
                     <!-- fin de bloque de codigo -->
 
-          <?php  }
+          <?php }
           } ?>
 
 
