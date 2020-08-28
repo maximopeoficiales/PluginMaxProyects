@@ -1,6 +1,8 @@
 <?php
 
 use Automattic\WooCommerce\Client;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 function getDataConfig()
 {
@@ -69,52 +71,7 @@ function order_preview_template()
                     }
                }
           </style>
-          <script>
-               /* funcion ismobile */
-               function isMobile() {
-                    return (
-                         navigator.userAgent.match(/Android/i) ||
-                         navigator.userAgent.match(/webOS/i) ||
-                         navigator.userAgent.match(/iPhone/i) ||
-                         navigator.userAgent.match(/iPod/i) ||
-                         navigator.userAgent.match(/iPad/i) ||
-                         navigator.userAgent.match(/BlackBerry/i)
-                    );
-               }
-               /* funcion para imprimir */
-               function imprimirDiv(imp1) {
-                    var printContents = document.querySelector(imp1).innerHTML;
-                    w = window.open();
-                    //se puede agregar algunos pequeños estilos
-                    var style = `
-				<style>
-					#status{display:none;}
-					#tipo_servicio{display:none;}
-					h1{font-size:10px;}
-					button{display:none;}
-					img{margin-top:2em;}
-					table {width: 100%; border: 1px solid #000; margin-top:10px; text-align:rigth;}
-					th, td {width: 25%;}
-					#cambiar_estado{display:none;}
-					#edit{display:none;}
-					#metodo_envio{display:none;}
-					#m_status{display:none;}
-					.order-status{display:none;}
-					.inner{display:none;}
-				</style>
-				`;
-                    w.document.write(style + printContents);
-                    /* w.document.close(); // necessary for IE >= 10
-                      w.focus(); // necessary for IE >= 10 */
-                    w.print();
-                    if (!isMobile()) {
-                         w.close();
-                    }
-                    return true;
-               }
 
-               /* fin de impresion */
-          </script>
           <script type="text/template" id="tmpl-wc-modal-view-order">
                <div class="wc-backbone-modal wc-order-preview">
 				<div class="wc-backbone-modal-content">
@@ -176,7 +133,31 @@ function order_preview_template()
 								<# } #>
 							</div>
 
-							{{{ data.item_html }}}
+                                   {{{ data.item_html }}}
+                                   <table cellspacing=" 0 " class="wc-order-preview-table">
+                                   <tr class="wc-order-preview-table__item wc-order-preview-table__item - 3">
+                                        <td class="wc- order-preview-table__column - product">
+                                             <div class="wc-order-item-sku">Envio</div>
+                                        </td>
+                                        <td class="wc-order-preview- table__column - cantidad"></td>
+                                        <td class="wc-order-preview-table__column - total">
+                                             <span class="woocommerce-Price-amount amount">
+                                                  <span class="woocommerce-Price-currencySymbol"></span>{{data.data.shipping_total}}
+                                             </span>
+                                        </td>
+                                   </tr>
+                                   <tr class="wc-order-preview-table__item wc-order-preview-table__item - 3">
+                                        <td class="wc- order-preview-table__column - product">
+                                             <div class="wc-order-item-sku"></div>
+                                        </td>
+                                        <td class="wc-order-preview- table__column - cantidad"></td>
+                                        <td class="wc-order-preview-table__column - total">
+                                             <span class="woocommerce-Price-amount amount">
+                                                  <span class="woocommerce-Price-currencySymbol"></span>{{data.data.total}}
+                                             </span>
+                                        </td>
+                                   </tr>
+                                   </table>
 							<!-- se agrego validacion para cuando no hayan datos de mapa -->			
                                    <?php do_action('woocommerce_admin_order_preview_end'); ?>
                                    <?php if ($data["api_key_google_maps"] != "") { ?>
@@ -189,11 +170,16 @@ function order_preview_template()
                                    <?php } ?>
 						</article>
 						<footer>
-							<div class="inner">
-								{{{ data.actions_html }}}
-								<a class="button button-primary button-large" aria-label="<?php esc_attr_e('Edit this order', 'woocommerce'); ?>" href="<?php echo esc_url(admin_url('post.php?action=edit')); ?>&post={{ data.data.id }}"><?php esc_html_e('Edit', 'woocommerce'); ?></a>
-								<button type="button" class="button button-primary button-large button_margin" onclick=imprimirDiv(".wc-backbone-modal-content")>Imprimir Resumen</button>	
-							</div>
+                                   <form action="/" method="POST">
+                                        <div class="inner">
+                                             {{{ data.actions_html }}}
+                                             <a class="button button-primary button-large" aria-label="<?php esc_attr_e('Edit this order', 'woocommerce'); ?>" href="<?php echo esc_url(admin_url('post.php?action=edit')); ?>&post={{ data.data.id }}"><?php esc_html_e('Edit', 'woocommerce'); ?></a>
+                                                       <!--    <button class="button button-primary button-large" type="button" role="button" aria-label="Imprimir" onclick="imprimirDiv('#datos_modal');">Imprimir</button> -->
+                                                       <button class="button button-primary button-large" type="submit" role="button" aria-label="Imprimir">Imprimir</button>
+                                                       <input type="hidden" name="me_post_pdf" value="submitted">
+                                                       <input type="hidden" name="id_order" value="{{data.data.id}}">
+                                        </div>
+                                   </form>	
 						</footer>
 					</section>
 				</div>
@@ -212,19 +198,15 @@ add_action('woocommerce_admin_order_data_after_shipping_address', 'action_woocom
 // define the woocommerce_admin_order_data_after_shipping_address callback 
 function action_woocommerce_admin_order_data_after_shipping_address()
 {
-     $data = getDataConfig();
-     $woocommerce = max_functions_getWoocommerce();
-     $func = function ($e) {
-          if ($e->key == "ce_longitud") {
-               return $e;
-          }
-     };
-     if ($data["api_key_google_maps"] != "") {
+     try {
+          $data = getDataConfig();
+          $woocommerce = max_functions_getWoocommerce();
+          if ($data["api_key_google_maps"] != "") {
 ?>
-          <?php if (!$_GET["post_type"]) {
-               $id_order = $_GET["post"];
-               $order = $woocommerce->get("orders/$id_order");
-               if (!strpos($order->created_via, "ywraq")) {
+               <?php if (!$_GET["post_type"]) {
+                    $id_order = $_GET["post"];
+                    $order = $woocommerce->get("orders/$id_order");
+
                     $coordenadas = array();
                     foreach ($order->meta_data as $e) {
                          if ($e->key == "ce_latitud") {
@@ -234,285 +216,281 @@ function action_woocommerce_admin_order_data_after_shipping_address()
                               array_push($coordenadas, $e);
                          }
                     }
-                    $latitud = $coordenadas[0]->value;
-                    $longitud = $coordenadas[1]->value;
-                    $link_google = "https://maps.google.com/?q=" . $latitud . "," . $longitud;
-          ?>
-                    <!-- CAMPO url Gmaps -->
-                    <p id="url_mapa"><a href="<?= $link_google ?>"><?= $link_google ?></a></p>
+                    if (isset($coordenadas) && $coordenadas[0]->value !== null) {
+                         $latitud = $coordenadas[0]->value;
+                         $longitud = $coordenadas[1]->value;
+                         $link_google = "https://maps.google.com/?q=" . $latitud . "," . $longitud;
+
+
+               ?>
+                         <!-- CAMPO url Gmaps -->
+                         <p id="url_mapa"><a href="<?= $link_google ?>"><?= $link_google ?></a></p>
+                    <?php     } ?>
                     <!-- campo url gmaps -->
                     <!-- bloque de codigo -->
                     <!-- estilos para el modal -->
-                    <style>
-                         * {
-                              margin: 0;
-                              padding: 0;
-                              box-sizing: border-box;
-                         }
-
-                         .flex {
-                              width: 100%;
-                              height: 100%;
-                              display: flex;
-                              justify-content: space-between;
-                              align-items: center;
-                         }
-
-                         .textos {
-                              padding: 300px;
-                              color: #fff;
-                              text-align: center;
-                         }
-
-                         .modal {
-                              display: none;
-                              position: fixed;
-                              z-index: 1;
-                              overflow: auto;
-                              left: 0;
-                              top: 0;
-                              width: 100%;
-                              height: 100%;
-                              background: rgba(0, 0, 0, 0.452);
-                         }
-
-                         .contenido-modal {
-                              position: relative;
-                              background-color: #fefefe;
-                              margin: auto;
-                              width: 60%;
-                              box-shadow: 0 0 6px 0 rgba(0, 0, 0, .4);
-                              animation-name: modal;
-                              animation-duration: 1s;
-                         }
-
-                         @keyframes modal {
-                              from {
-                                   top: -330px;
-                                   opacity: 0;
+                    <?php if ($order->shipping->address_1 !== "") {
+                         # code...
+                    ?>
+                         <style>
+                              * {
+                                   margin: 0;
+                                   padding: 0;
+                                   box-sizing: border-box;
                               }
 
-                              to {
+                              .flex {
+                                   width: 100%;
+                                   height: 100%;
+                                   display: flex;
+                                   justify-content: space-between;
+                                   align-items: center;
+                              }
+
+                              .textos {
+                                   padding: 300px;
+                                   color: #fff;
+                                   text-align: center;
+                              }
+
+                              .modal {
+                                   display: none;
+                                   position: fixed;
+                                   z-index: 1;
+                                   overflow: auto;
+                                   left: 0;
                                    top: 0;
-                                   opacity: 1;
+                                   width: 100%;
+                                   height: 100%;
+                                   background: rgba(0, 0, 0, 0.452);
                               }
-                         }
 
-                         .modal-header,
-                         .footer {
-                              padding: 8px 16px;
-                              background: #34495e;
-                              color: #f2f2f2;
-                         }
-
-                         .modal-body {
-                              padding: 11px 16px;
-
-                         }
-
-                         span {
-                              font-size: 12px;
-                         }
-
-                         @media screen and (max-width:768px) {
                               .contenido-modal {
-                                   width: 90%;
+                                   position: relative;
+                                   background-color: #fefefe;
+                                   margin: auto;
+                                   width: 60%;
+                                   box-shadow: 0 0 6px 0 rgba(0, 0, 0, .4);
+                                   animation-name: modal;
+                                   animation-duration: 1s;
                               }
 
+                              @keyframes modal {
+                                   from {
+                                        top: -330px;
+                                        opacity: 0;
+                                   }
 
-                         }
-                    </style>
-                    <!-- fin de estilos para el modal -->
-                    <a href="#" id="abrir" class="button button-primary right">Imprimir Resumen</a>
-                    <!-- modal de impresion -->
+                                   to {
+                                        top: 0;
+                                        opacity: 1;
+                                   }
+                              }
 
-                    <div id="miModal" class="modal">
-                         <div class="flex" id="flex">
-                              <div class="contenido-modal">
-                                   <div id="wc-backbone-modal-dialog" id="miModal">
-                                        <div class="wc-backbone-modal wc-order-preview">
-                                             <div class="wc-backbone-modal-content" tabindex="0">
-                                                  <section class="wc-backbone-modal-main" role="main" id="datos_modal">
-                                                       <header class="wc-backbone-modal-header">
-                                                            <mark class="order-status status-processing"><span><?= strtoupper($order->status) ?></span></mark>
-                                                            <h1 id="m_n_pedido">Pedido <?= $id_order ?></h1>
-                                                            <button class="modal-close modal-close-link dashicons dashicons-no-alt" id="close">
-                                                                 <!-- <span class="screen-reader-text">Cerrar ventana modal</span> -->
-                                                            </button>
-                                                       </header>
-                                                       <article style="max-height: 481.5px;">
+                              .modal-header,
+                              .footer {
+                                   padding: 8px 16px;
+                                   background: #34495e;
+                                   color: #f2f2f2;
+                              }
 
-                                                            <div class="wc-order-preview-addresses">
-                                                                 <div class="wc-order-preview-address">
-                                                                      <h2>Detalles del Cliente</h2>
-                                                                      <strong>Nombre</strong>
-                                                                      <span><?= $order->billing->first_name ?></span>
-                                                                      <strong>Correo electrónico</strong>
-                                                                      <a href="<?= $order->billing->email ?>"><?= $order->billing->email ?></a>
-                                                                      <strong>Teléfono</strong>
-                                                                      <a href="tel:<?= $order->billing->phone ?>"><?= $order->billing->phone ?></a><br>
-                                                                      <strong>Pago mediante</strong>
-                                                                      <span><?= strtoupper($order->payment_method_title) ?></span>
+                              .modal-body {
+                                   padding: 11px 16px;
 
-                                                                 </div>
-                                                                 <div class="wc-order-preview-address">
-                                                                      <h2>Detalles de envío</h2>
-                                                                      <a href="<?= $link_google ?>" target="_blank"><?= $link_google ?></a>
+                              }
 
-                                                                      <div style="margin-top: 5px;">
-                                                                           <strong>Método de envío</strong>
-                                                                           Se aplicarán costos de envío según tu dirección en la siguiente página.
+                              span {
+                                   font-size: 12px;
+                              }
+
+                              @media screen and (max-width:768px) {
+                                   .contenido-modal {
+                                        width: 90%;
+                                   }
+
+
+                              }
+                         </style>
+                         <!-- fin de estilos para el modal -->
+                         <a href="#" id="abrir" class="button button-primary right">Imprimir Resumen</a>
+                         <!-- modal de impresion -->
+
+                         <div id="miModal" class="modal">
+                              <div class="flex" id="flex">
+                                   <div class="contenido-modal">
+                                        <div id="wc-backbone-modal-dialog" id="miModal">
+                                             <div class="wc-backbone-modal wc-order-preview">
+                                                  <div class="wc-backbone-modal-content" tabindex="0">
+                                                       <section class="wc-backbone-modal-main" role="main" id="datos_modal">
+                                                            <header class="wc-backbone-modal-header">
+                                                                 <mark class="order-status status-processing"><span><?= strtoupper($order->status) ?></span></mark>
+                                                                 <h1 id="m_n_pedido">Pedido <?= $id_order ?></h1>
+                                                                 <button class="modal-close modal-close-link dashicons dashicons-no-alt" id="close">
+                                                                      <!-- <span class="screen-reader-text">Cerrar ventana modal</span> -->
+                                                                 </button>
+                                                            </header>
+                                                            <article style="max-height: 481.5px;">
+
+                                                                 <div class="wc-order-preview-addresses">
+                                                                      <div class="wc-order-preview-address">
+                                                                           <h2>Detalles del Cliente</h2>
+                                                                           <strong>Nombre</strong>
+                                                                           <span><?= $order->billing->first_name ?></span>
+                                                                           <strong>Correo electrónico</strong>
+                                                                           <a href="<?= $order->billing->email ?>"><?= $order->billing->email ?></a>
+                                                                           <strong>Teléfono</strong>
+                                                                           <a href="tel:<?= $order->billing->phone ?>"><?= $order->billing->phone ?></a><br>
+                                                                           <strong>Pago mediante</strong>
+                                                                           <span><?= strtoupper($order->payment_method_title) ?></span>
+
                                                                       </div>
-                                                                      <br>
-                                                                      <strong>Nota Cliente:</strong>
-                                                                      <span><?= $order->customer_note ?></span>
+                                                                      <div class="wc-order-preview-address">
+                                                                           <h2>Detalles de envío</h2>
+                                                                           <?php if (isset($coordenadas) && $coordenadas[0]->value !== null) { ?>
+                                                                                <strong>Link de Google Maps</strong>
+                                                                                <a href="<?= $link_google ?>" target="_blank"><?= $link_google ?></a>
+                                                                           <?php
+                                                                           } ?>
+                                                                           <div style="margin-top: 5px;">
+                                                                                <strong>Método de envío</strong>
+                                                                                Se aplicarán costos de envío según tu dirección en la siguiente página.
+                                                                           </div>
+                                                                           <br>
+                                                                           <strong>Nota Cliente:</strong>
+                                                                           <span><?= $order->customer_note ?></span>
+                                                                      </div>
                                                                  </div>
-                                                            </div>
 
-                                                            <div id="m_tabla_datos">
-                                                                 <div class="wc-order-preview-table-wrapper">
-                                                                      <table cellspacing=" 0 " class="wc-order-preview-table">
-                                                                           <thead>
-                                                                                <tr>
-                                                                                     <th class="wc-order -preview-table__column - product">Producto</th>
-                                                                                     <th class="wc-order-preview-table__column - amount">Cantidad</th>
-                                                                                     <th class="wc-order-preview-table__column-- total">Total</th>
-                                                                                </tr>
-                                                                           </thead>
-                                                                           <tbody>
-                                                                                <?php
-                                                                                foreach ($order->line_items as $item) {
-                                                                                ?>
+                                                                 <div id="m_tabla_datos">
+                                                                      <div class="wc-order-preview-table-wrapper">
+                                                                           <table cellspacing=" 0 " class="wc-order-preview-table">
+                                                                                <thead>
+                                                                                     <tr>
+                                                                                          <th class="wc-order -preview-table__column - product">Producto</th>
+                                                                                          <th class="wc-order-preview-table__column - amount">Cantidad</th>
+                                                                                          <th class="wc-order-preview-table__column-- total">Total</th>
+                                                                                     </tr>
+                                                                                </thead>
+                                                                                <tbody>
+                                                                                     <?php
+                                                                                     foreach ($order->line_items as $item) {
+                                                                                     ?>
+                                                                                          <tr class="wc-order-preview-table__item wc-order-preview-table__item - 3">
+                                                                                               <td class="wc- order-preview-table__column - product">
+                                                                                                    <?= $item->name  ?>
+                                                                                                    <div class="wc-order-item-sku"></div>
+                                                                                               </td>
+                                                                                               <td class="wc-order-preview- table__column - cantidad"><?= $item->quantity ?></td>
+                                                                                               <td class="wc-order-preview-table__column - total">
+                                                                                                    <span class="woocommerce-Price-amount amount">
+                                                                                                         <span class="woocommerce-Price-currencySymbol"> <?= $order->currency_symbol ?></span> <?= number_format($item->price * $item->quantity, 2, ".", "")  ?>
+                                                                                                    </span>
+                                                                                               </td>
+                                                                                          </tr>
+                                                                                     <?php } ?>
+                                                                                     <?php if (isset($order->shipping_lines)) {
+                                                                                          foreach ($order->shipping_lines as  $envio) {
+                                                                                     ?>
+                                                                                               <tr class="wc-order-preview-table__item wc-order-preview-table__item - 3">
+                                                                                                    <td class="wc- order-preview-table__column - product">
+                                                                                                         Envio
+                                                                                                         <div class="wc-order-item-sku"></div>
+                                                                                                    </td>
+                                                                                                    <td class="wc-order-preview- table__column - cantidad"></td>
+                                                                                                    <td class="wc-order-preview-table__column - total">
+                                                                                                         <span class="woocommerce-Price-amount amount">
+                                                                                                              <span class="woocommerce-Price-currencySymbol"> <?= $order->currency_symbol ?></span> <?= number_format($envio->total, 2, ".", "")  ?>
+                                                                                                         </span>
+                                                                                                    </td>
+                                                                                               </tr>
+                                                                                     <?php
+                                                                                          }
+                                                                                     } ?>
                                                                                      <tr class="wc-order-preview-table__item wc-order-preview-table__item - 3">
                                                                                           <td class="wc- order-preview-table__column - product">
-                                                                                               <?= $item->name  ?>
                                                                                                <div class="wc-order-item-sku"></div>
                                                                                           </td>
-                                                                                          <td class="wc-order-preview- table__column - cantidad"><?= $item->quantity ?></td>
+                                                                                          <td class="wc-order-preview- table__column - cantidad"></td>
                                                                                           <td class="wc-order-preview-table__column - total">
                                                                                                <span class="woocommerce-Price-amount amount">
-                                                                                                    <span class="woocommerce-Price-currencySymbol"> <?= $order->currency_symbol ?></span> <?= number_format($item->price, 2, ".", "")  ?>
+                                                                                                    <span class="woocommerce-Price-currencySymbol"> <?= $order->currency_symbol ?></span> <?= number_format($order->total, 2, ".", "")  ?>
                                                                                                </span>
                                                                                           </td>
                                                                                      </tr>
-                                                                                <?php } ?>
-                                                                           </tbody>
-                                                                      </table>
+                                                                                </tbody>
+                                                                           </table>
+                                                                      </div>
                                                                  </div>
-                                                            </div>
-                                                            <img src="https://maps.googleapis.com/maps/api/staticmap?center=<?= $latitud ?>,<?= $longitud ?>&zoom=16&size=600x400&markers=color:red%7C<?= $latitud ?>,<?= $longitud ?>&key=<?= $data["api_key_google_maps"] ?>" width="100%" height="400px" />
-                                                       </article>
-                                                       <footer>
-                                                            <div class="inner">
-
-                                                                 <button class="button button-primary button-large" type="button" role="button" aria-label="Imprimir" onclick="imprimirDiv('#datos_modal');">Imprimir</button>
-                                                            </div>
-                                                       </footer>
-                                                  </section>
+                                                                 <?php if (isset($coordenadas) && $coordenadas[0]->value !== null) { ?>
+                                                                      <img src="https://maps.googleapis.com/maps/api/staticmap?center=<?= $latitud ?>,<?= $longitud ?>&zoom=16&size=600x400&markers=color:red%7C<?= $latitud ?>,<?= $longitud ?>&key=<?= $data["api_key_google_maps"] ?>" width="100%" height="400px" />
+                                                                 <?php
+                                                                 } ?>
+                                                            </article>
+                                                            <footer>
+                                                                 <form action="/" method="POST">
+                                                                      <div class="inner">
+                                                                           <!--    <button class="button button-primary button-large" type="button" role="button" aria-label="Imprimir" onclick="imprimirDiv('#datos_modal');">Imprimir</button> -->
+                                                                           <button class="button button-primary button-large" type="submit" role="button" aria-label="Imprimir">Imprimir</button>
+                                                                           <input type="hidden" name="me_post_pdf" value="submitted">
+                                                                           <input type="hidden" name="id_order" value="<?= $id_order ?>">
+                                                                      </div>
+                                                                 </form>
+                                                            </footer>
+                                                       </section>
+                                                  </div>
                                              </div>
                                         </div>
                                    </div>
                               </div>
                          </div>
-                    </div>
-                    <!-- fin de modal -->
-                    <script>
-                         /* funcion ismobile */
-                         function isMobile() {
-                              return (
-                                   navigator.userAgent.match(/Android/i) ||
-                                   navigator.userAgent.match(/webOS/i) ||
-                                   navigator.userAgent.match(/iPhone/i) ||
-                                   navigator.userAgent.match(/iPod/i) ||
-                                   navigator.userAgent.match(/iPad/i) ||
-                                   navigator.userAgent.match(/BlackBerry/i)
-                              );
-                         }
-                         //funcion para imprimir un div o seccion
-                         function imprimirDiv(imp1) {
-                              var printContents = document.getElementById(imp1).innerHTML;
-                              w = window.open();
-                              //se puede agregar algunos pequeños estilos 
-                              var style = `
-									<style>
-										#status{display:none;}
-										#tipo_servicio{display:none;}
-										h1{font-size:10px;}
-										button{display:none;}
-										img{margin-top:2em;}
-										table {width: 100%; border: 1px solid #000; margin-top:10px; text-align:rigth;}
-										th, td {width: 25%;}
-										#cambiar_estado{display:none;}
-										#edit{display:none;}
-										#metodo_envio{display:none;}
-										#m_status{display:none;}
-									</style>
-									`;
-                              w.document.write(style + printContents);
-                              /* w.document.close(); // necessary for IE >= 10
-                              w.focus(); // necessary for IE >= 10 */
-                              w.print();
-                              if (!isMobile()) {
-                                   w.close();
-                              }
-                              return true;
-                         }
+                         <!-- fin de modal -->
+                         <script>
+                              let modal = document.getElementById('miModal');
+                              let flex = document.getElementById('flex');
+                              let abrir = document.getElementById('abrir');
+                              let cerrar = document.getElementById('close');
 
-                         let modal = document.getElementById('miModal');
-                         let flex = document.getElementById('flex');
-                         let abrir = document.getElementById('abrir');
-                         let cerrar = document.getElementById('close');
+                              abrir.addEventListener('click', function() {
+                                   modal.style.display = 'block';
+                                   document.querySelector("#wc-backbone-modal-dialog").style.display = "none";
 
-                         function isMobile() {
-                              return (
-                                   (navigator.userAgent.match(/Android/i)) ||
-                                   (navigator.userAgent.match(/webOS/i)) ||
-                                   (navigator.userAgent.match(/iPhone/i)) ||
-                                   (navigator.userAgent.match(/iPod/i)) ||
-                                   (navigator.userAgent.match(/iPad/i)) ||
-                                   (navigator.userAgent.match(/BlackBerry/i))
-                              );
-                         }
-
-                         abrir.addEventListener('click', function() {
-                              modal.style.display = 'block';
-                              document.querySelector("#wc-backbone-modal-dialog").style.display = "none";
-
-                              document.querySelector("#wc-backbone-modal-dialog").style.display = "";
+                                   document.querySelector("#wc-backbone-modal-dialog").style.display = "";
 
 
 
 
-                              document.querySelector(".woocommerce-layout__header").style.display = 'none';
-                              /* if (isMobile()) { */
-                              document.querySelector("#wpadminbar").style.display = 'none';
-                              /* } */
-                         });
+                                   document.querySelector(".woocommerce-layout__header").style.display = 'none';
+                                   /* if (isMobile()) { */
+                                   document.querySelector("#wpadminbar").style.display = 'none';
+                                   /* } */
+                              });
 
-                         cerrar.addEventListener('click', function(e) {
-                              e.preventDefault();
-                              modal.style.display = 'none';
-                              document.querySelector(".woocommerce-layout__header").style.display = '';
-                              /* if (isMobile()) { */
-                              document.querySelector("#wpadminbar").style.display = '';
-                              /* 	} */
-                         });
-
-                         window.addEventListener('click', function(e) {
-                              if (e.target == flex) {
+                              cerrar.addEventListener('click', function(e) {
+                                   e.preventDefault();
                                    modal.style.display = 'none';
                                    document.querySelector(".woocommerce-layout__header").style.display = '';
+                                   /* if (isMobile()) { */
+                                   document.querySelector("#wpadminbar").style.display = '';
+                                   /* 	} */
+                              });
 
-                              }
-                         });
-                    </script>
-                    <!-- fin de bloque de codigo -->
+                              window.addEventListener('click', function(e) {
+                                   if (e.target == flex) {
+                                        modal.style.display = 'none';
+                                        document.querySelector(".woocommerce-layout__header").style.display = '';
 
-          <?php  }
-          } ?>
+                                   }
+                              });
+                         </script>
+                         <!-- fin de bloque de codigo -->
 
-
-<?php }
+               <?php }
+               } ?>
+     <?php
+          }
+     } catch (\Throwable $th) {
+          //throw $th;
+     }
 };
 function my_custom_js()
 {
@@ -608,7 +586,47 @@ function max_function_webhook_custom($http_args, $response, $duration, $arg, $id
      $data = $http_args["body"];
      execWebHook($data, $urlSend);
 }
+function action_woocommerce_after_checkout_billing_form($wccs_custom_checkout_field_pro)
+{     ?>
+     <div class="btn-group text-center" style="text-align:center; margin-bottom:10px;  margin-top:10px;display: flex;justify-content:center  !important;align-items:center !important;" role="group">
+          <button type="button" class="btn btn-secondary mr-2" id="miubicacion"><i class="fas fa-map-marker-alt fa-fw"></i>Mi Ubicacion</button>
+          <button type="button" class="btn btn-secondary ml-2" id="buscar"><i class="fas fa-search-location fa-fw"></i>Buscar</button>
+     </div>
+     <div style="width: 100%; height: 480px" id="map-canvas"></div>
+<?php
+};
+add_action('woocommerce_after_checkout_billing_form', 'action_woocommerce_after_checkout_billing_form', 10, 1);
 
+function me_post_pdf()
+{
+     if (isset($_POST['me_post_pdf']) && isset($_POST['id_order'])) {
+          $options = new Options();
+          $options->set('isHtml5ParserEnabled', true);
+          $options->set('isRemoteEnabled', true);
+          //obtengo api key
+          $data = getDataConfig();
+          $api_key_google = "";
+          if ($data["api_key_google_maps"] !== "") {
+               $api_key_google = $data["api_key_google_maps"];
+          }
+          //me conecto con woocommerce
+          $id_order = $_POST['id_order'];
+          $woo = max_functions_getWoocommerce();
+          $order = $woo->get("orders/$id_order");
 
+          // instantiate and use the dompdf class
+          $dompdf = new Dompdf($options);
+          //como lo incluyo el template order.php puede usar la data
+          ob_start();
+          include  __DIR__ . "/templates_pdf/order.php";
+          $html = ob_get_clean();
+          $dompdf->loadHtml($html);
+          $dompdf->setPaper('A4', 'potrait');
+          // Render the HTML as PDF
+          $dompdf->render();
+          // Output the generated PDF to Browser
+          return $dompdf->stream("order_$id_order");
+     }
+}
 
-?>
+add_action('init', 'me_post_pdf');
