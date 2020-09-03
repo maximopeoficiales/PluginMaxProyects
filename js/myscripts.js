@@ -42,7 +42,16 @@ try {
     function calcularEnvio() {
       let postcode = document.querySelector("#billing_postcode.input-text");
       v.queue_update_checkout(postcode);
-    }
+    } /* div de direccion donde se pondra el mapa */
+/*     let divDireccion = document.querySelector("#billing_address_1_field");
+    let mapa =
+      '<div style="width: 100%; height: 480px" id="map-canvas"></div>';
+    let botones =
+      '<div class="btn-group text-center" style="text-align:center; margin-bottom:10px;  margin-top:10px;display: flex;justify-content:center  !important;align-items:center !important; role="group"><button type="button" class="btn btn-secondary mr-2" id="miubicacion"><i class="fas fa-map-marker-alt fa-fw"></i>Mi Ubicacion</button><button type="button" class="btn btn-secondary ml-2" id="buscar"><i class="fas fa-search-location fa-fw"></i>Buscar</button></div>';
+    divDireccion.insertAdjacentHTML("beforeend", botones);
+    divDireccion.insertAdjacentHTML("beforeend", "<p></p>");
+    divDireccion.insertAdjacentHTML("beforeend", mapa);
+    divDireccion.insertAdjacentHTML("beforeend", "<p></p>"); */
     /* fin de insercion de mapas */
     const input_direccion = "#billing_address_1.input-text";
     /* vacio y oculto algunos campos */
@@ -274,7 +283,8 @@ try {
     });
 
     /* inicializa el mapa al cargar la pagina */
-    google.maps.event.addDomListener(window, "load", initialize);
+    initialize();
+    // google.maps.event.addDomListener(window, "load", initialize);
   });
 } catch (error) {
   console.warn("Ocurrio en error actualize el plugin :D");

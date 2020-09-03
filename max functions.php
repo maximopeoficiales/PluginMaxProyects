@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
+// error_reporting(0);
 
 /* 
      Plugin Name: Max Functions 
@@ -71,4 +72,5 @@ add_action('init', 'max_functions_init', 0);
 
 
 
-include 'inc/woo-functions.php';
+require 'inc/woo-functions.php';
+require 'inc/endpoints.php';
