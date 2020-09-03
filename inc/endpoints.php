@@ -103,17 +103,13 @@ function mfUpdateProductWoo($sku, $data)
 {
      $material = $data["material"];
      //validations
-     $validator = new Validator;
      $params = ["sku" => $sku, "stock" => $material["stock"]];
-     $validation = $validator->make($params, [
-          'sku'                  => 'required|min:1|max:12',
-          'stock'                  => 'required|min:1|max:5',
+     $validation = mfUtilityValidator($params, [
+          'sku'                  => 'required|max:12',
+          'stock'                  => 'required|max:5',
      ]);
-     $validation->validate();
-     if ($validation->fails()) {
-          $errors = $validation->errors();
-          $response = ["value" => 0, "message" => $errors->firstOfAll()];
-          return   $response;
+     if (!$validation["validate"]) {
+          return $validation["errors"];
      }
      //updated
      $dataUpdated = [
@@ -182,7 +178,21 @@ function mfUpdateMaterial($params)
           return mfSendResponse(["value" => 1, "message" => "Todo Correcto"]);
      }, ["security" => "required", "material" => "required"]);
 }
-
+function mfCreateClient($params)
+{
+     $data = mfXmlToArray("php://input"); //recogo data xml
+     return  mfValidationGeneralAuth($data, $params, function ($data) {
+          $client = $data["client"];
+          $validateClient = mfValidateClientFields($client); //validacion de security
+          if ($validateClient["validate"]) {
+               // $created = mfCreateProductWoo($data);
+               // return mfSendResponse($created);
+               return mfSendResponse(["value" => 1, "message" => "Todo Correcto"]);
+          } else {
+               return mfSendResponse($validateClient["errors"]);
+          }
+     }, ["security" => "required", "client" => "required"]);
+}
 
 //EndPoints
 // http://maxco.punkuhr.test/wp-json/max_functions/v1/materials (POST)
@@ -193,11 +203,20 @@ add_action("rest_api_init", function () {
           'args'            => array(),
      ));
 });
-// http://maxco.punkuhr.test/wp-json/max_functions/v1/materials/sku (POST)
+// http://maxco.punkuhr.test/wp-json/max_functions/v1/materials/sku (PUT)
 add_action("rest_api_init", function () {
      register_rest_route("max_functions/v1", "/materials/(?P<sku>\d+)", array(
-          "methods" => "POST",
+          "methods" => "PUT",
           "callback" => "mfUpdateMaterial",
+          'args'            => array(),
+     ));
+});
+//------Clientes------
+// http://maxco.punkuhr.test/wp-json/max_functions/v1/clients (POST)
+add_action("rest_api_init", function () {
+     register_rest_route("max_functions/v1", "/clients", array(
+          "methods" => "POST",
+          "callback" => "mfCreateClient",
           'args'            => array(),
      ));
 });
@@ -238,35 +257,39 @@ function mfValidateDataEmpty($data, $validations)
 }
 function mfValidateSecurityFields($security)
 {
-     $validator = new Validator;
-     // make it
-     $validation = $validator->make($security, [
-          'user'                  => 'required|min:1|max:11',
-          'pass'              => 'required|min:1|max:13',
+     return mfUtilityValidator($security, [
+          'user'                  => 'required|max:11',
+          'pass'              => 'required|max:13',
      ]);
-     $validation->validate();
-     if ($validation->fails()) {
-          // handling errors
-          $errors = $validation->errors();
-          $response = ["value" => 0, "message" => $errors->firstOfAll()];
-          return ["validate" => false, "errors" => $response];
-     } else {
-          return ["validate" => true];
-     }
 }
 function mfValidateMaterialFields($material)
 {
-     $validator = new Validator;
-     // make it
-     $validation = $validator->make($material, [
-          'sku'                  => 'required|min:1|max:12',
-          'name'              => 'required|min:1|max:40',
-          'unit'              => 'required|min:1|max:3',
-          'weight'              => 'required|min:1|max:6',
+     return mfUtilityValidator($material, [
+          'sku'                  => 'required|max:12',
+          'name'              => 'required|max:40',
+          'unit'              => 'required|max:3',
+          'weight'              => 'required|max:6',
      ]);
+}
+function mfValidateClientFields($client)
+{
+     return mfUtilityValidator($client, [
+          'cd_cli' => 'required|max:10',
+          'name' => 'required|max:40',
+          'nrdoc' => 'required|max:11',
+          'telephone' => 'required|max:9',
+          'email' => 'required|max:30',
+          'address' => 'required|max:70',
+     ]);
+}
+
+
+function mfUtilityValidator($params, $validations)
+{
+     $validator = new Validator;
+     $validation = $validator->make($params, $validations);
      $validation->validate();
      if ($validation->fails()) {
-          // handling errors
           $errors = $validation->errors();
           $response = ["value" => 0, "message" => $errors->firstOfAll()];
           return ["validate" => false, "errors" => $response];
@@ -274,4 +297,3 @@ function mfValidateMaterialFields($material)
           return ["validate" => true];
      }
 }
-q
