@@ -3,17 +3,22 @@
 use mjohnson\utility\TypeConverter;
 use Rakit\Validation\Validator;
 //utilidades
-function mfSetResponse($respuesta, $detalle, $data, $status, $json = false)
+function mfSendResponse($response, $message, $data = null, $status = 200)
 {
+     $json = true;
      $typeApp = $json ? "json" : "xml";
      $array = array(
-          'RESPONSE' => $respuesta,
-          'DETAILS' => $detalle,
+          'RESPONSE' => $response,
+          'DETAILS' => $message,
           'STATUS' => $status,
           'DATA' => $data,
      );
-     Header("Content-Type: text/$typeApp; charset=utf-8", true, $status);
-     return $json ? $array : mfArrayToXML($array);
+     header("Content-Type: text/$typeApp; charset=utf-8");
+     // status_header(intval($status));
+     if ($json)
+          return $array;
+     else
+          print(mfArrayToXML($array));
 }
 function mfIsAuthorized($user, $password)
 {
@@ -25,7 +30,7 @@ function mfIsAuthorized($user, $password)
 }
 function mfNotAuthorized()
 {
-     return mfSendResponse(["value" => 0, "message" => "Error en la autenticacion"]);
+     return mfSendResponse(0, "Error en la autenticacion", null, 400);
 }
 function mfXmlToArray($url)
 {
@@ -54,6 +59,7 @@ function mfGetUnitWithMetadata($metadata, $unit)
      }
      return $value;
 }
+
 function mfUpdateProductWithSku($sku, $dataUpdated)
 {
      $woo = max_functions_getWoocommerce();
@@ -109,7 +115,7 @@ function mfUpdateProductWoo($sku, $data)
           'stock'                  => 'required|max:5',
      ]);
      if (!$validation["validate"]) {
-          return $validation["errors"];
+          return ["value" => $validation["value"], "message" => $validation["message"]];
      }
      //updated
      $dataUpdated = [
@@ -131,23 +137,100 @@ function mfUpdateProductWoo($sku, $data)
           ];
      }
 }
-function mfSendResponse($response)
+function mfCreateClientWoo($data)
 {
-     $json = true;
-     if ($response["value"] !== 0) {
-          //si no es un error
-          $data = mfSetResponse($response["value"], $response["message"],  $response["data"], 200, $json);
-          if ($json)
-               return $data;
-          else
-               print($data);
+
+     $woo = max_functions_getWoocommerce();
+     $client = $data["client"];
+     $email = $client["email"];
+     $dataSend = [
+          'first_name' => $client["name"],
+          'email' => $email,
+          "billing" => [
+               'first_name' => $client["name"],
+               'address_1' => $client["address"],
+               'phone' => $client["telephone"],
+               'email' => $email,
+          ],
+          "meta_data" =>  [
+               [
+                    "key" => "cd_cli",
+                    "value" => $client['cd_cli']
+               ]
+          ]
+
+     ];
+     $exists = email_exists($email);
+     if ($exists) {
+          return [
+               "value" => 0,
+               "message" => "EL email: $email ya existe",
+          ];
      } else {
-          //si ocurrio un error
-          $data = mfSetResponse($response["value"], $response["message"], null, 400, $json);
-          if ($json)
-               return $data;
-          else
-               print($data);
+          $response = $woo->post('customers', $dataSend); //devuelve un objeto
+          if ($response->id !== null) {
+               return [
+                    "value" => 1,
+                    "data" => $response,
+                    "message" => "Registro de Cliente Exitoso",
+               ];
+          }
+     }
+}
+function mfUpdateClientWoo($cd_cli, $data)
+{
+     global $wpdb;
+     $table = $wpdb->base_prefix . 'usermeta';
+     $sql = "SELECT user_id FROM $table WHERE meta_key = 'cd_cli' and meta_value= '%d' LIMIT 1";
+     $result = $wpdb->get_results($wpdb->prepare($sql, $cd_cli));
+     if (empty($result)) {
+          return [
+               "value" => 0,
+               "message" => "EL ID_CLI: $cd_cli no existe",
+          ];
+     } else {
+          $id_cliente = $result[0]->user_id;
+          //actualizacion de cliente
+          $woo = max_functions_getWoocommerce();
+          $client = $data["client"];
+          //validaciones
+          $validation = mfUtilityValidator($client, [
+               'name' => 'required|max:40',
+               'telephone' => 'required|max:9',
+               'email' => 'email|max:30',
+               'address' => 'required|max:70',
+          ]);
+          if (!$validation["validate"]) {
+               return ["value" => 0, "message" => $validation["message"]];
+          }
+
+          $email = $client["email"];
+          $dataUpdated = [
+               'first_name' => $client["name"],
+               'email' => $email,
+               "billing" => [
+                    'first_name' => $client["name"],
+                    'address_1' => $client["address"],
+                    'phone' => $client["telephone"],
+                    'email' => $email,
+               ],
+          ];
+          $exists = email_exists($email);
+          if ($exists) {
+               return [
+                    "value" => 0,
+                    "message" => "EL email: $email ya esta registrado",
+               ];
+          } else {
+               $response = $woo->put("customers/$id_cliente", $dataUpdated); //devuelve un objeto
+               if ($response->id !== null) {
+                    return [
+                         "value" => 2,
+                         "message" => "Todo Bien",
+                         "data" => $response,
+                    ];
+               }
+          }
      }
 }
 
@@ -160,10 +243,10 @@ function mfCreateMaterial($params)
           $validateMaterial = mfValidateMaterialFields($material); //validacion de security
           if ($validateMaterial["validate"]) {
                // $created = mfCreateProductWoo($data);
-               // return mfSendResponse($created);
-               return mfSendResponse(["value" => 1, "message" => "Todo Correcto"]);
+               // return mfSendResponse($created["value"],$created["message"],$created["data"]);
+               return mfSendResponse(1, "Todo Correcto");
           } else {
-               return mfSendResponse($validateMaterial["errors"]);
+               return mfSendResponse(0, $validateMaterial["message"], null, 400);
           }
      }, ["security" => "required", "material" => "required"]);
 }
@@ -174,8 +257,8 @@ function mfUpdateMaterial($params)
      return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
           // $sku = $params["sku"];
           // $updated = mfUpdateProductWoo($sku, $data);
-          // return mfSendResponse($updated);
-          return mfSendResponse(["value" => 1, "message" => "Todo Correcto"]);
+          // return mfSendResponse($updated["value"],$updated["message"],$updated["data"]);
+          return mfSendResponse(1, "Todo Correcto");
      }, ["security" => "required", "material" => "required"]);
 }
 function mfCreateClient($params)
@@ -185,16 +268,26 @@ function mfCreateClient($params)
           $client = $data["client"];
           $validateClient = mfValidateClientFields($client); //validacion de security
           if ($validateClient["validate"]) {
-               // $created = mfCreateProductWoo($data);
-               // return mfSendResponse($created);
-               return mfSendResponse(["value" => 1, "message" => "Todo Correcto"]);
+               // $created = mfCreateClientWoo($data);
+               // return mfSendResponse($created["value"], $created["message"], $created["data"]);
+               return mfSendResponse(1, "Todo Correcto");
           } else {
-               return mfSendResponse($validateClient["errors"]);
+               return mfSendResponse(0, $validateClient["message"], null, 400);
           }
+     }, ["security" => "required", "client" => "required"]);
+}
+function mfUpdateClient($params)
+{
+     $data = mfXmlToArray("php://input"); //recogo data xml
+     return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
+          $cd_cli = $params["cd_cli"];
+          $updated = mfUpdateClientWoo($cd_cli, $data);
+          return mfSendResponse($updated["value"], $updated["message"], $updated["data"]);
      }, ["security" => "required", "client" => "required"]);
 }
 
 //EndPoints
+//------Materiales------
 // http://maxco.punkuhr.test/wp-json/max_functions/v1/materials (POST)
 add_action("rest_api_init", function () {
      register_rest_route("max_functions/v1", "/materials", array(
@@ -220,6 +313,14 @@ add_action("rest_api_init", function () {
           'args'            => array(),
      ));
 });
+// http://maxco.punkuhr.test/wp-json/max_functions/v1/clients/cd_cli (PUT)
+add_action("rest_api_init", function () {
+     register_rest_route("max_functions/v1", "/clients/(?P<cd_cli>\d+)", array(
+          "methods" => "PUT",
+          "callback" => "mfUpdateClient",
+          'args'            => array(),
+     ));
+});
 
 //validations
 function mfValidationGeneralAuth($data, $params = null, $function, $validations = [])
@@ -235,10 +336,10 @@ function mfValidationGeneralAuth($data, $params = null, $function, $validations 
                     return mfNotAuthorized();
                }
           } else {
-               return mfSendResponse($validateSecurity["errors"]);
+               return mfSendResponse(0, $validateSecurity["message"], null, 400);
           }
      } else {
-          return mfSendResponse($validateBody["errors"]);
+          return mfSendResponse(0, $validateBody["message"], null, 400);
      }
 }
 function mfValidateDataEmpty($data, $validations)
@@ -249,8 +350,7 @@ function mfValidateDataEmpty($data, $validations)
      if ($validation->fails()) {
           // handling errors
           $errors = $validation->errors();
-          $response = ["value" => 0, "message" => $errors->firstOfAll()];
-          return ["validate" => false, "errors" => $response];
+          return ["validate" => false, "message" => $errors->firstOfAll()];
      } else {
           return ["validate" => true];
      }
@@ -276,9 +376,8 @@ function mfValidateClientFields($client)
      return mfUtilityValidator($client, [
           'cd_cli' => 'required|max:10',
           'name' => 'required|max:40',
-          'nrdoc' => 'required|max:11',
           'telephone' => 'required|max:9',
-          'email' => 'required|max:30',
+          'email' => 'required|max:30|email',
           'address' => 'required|max:70',
      ]);
 }
@@ -291,8 +390,7 @@ function mfUtilityValidator($params, $validations)
      $validation->validate();
      if ($validation->fails()) {
           $errors = $validation->errors();
-          $response = ["value" => 0, "message" => $errors->firstOfAll()];
-          return ["validate" => false, "errors" => $response];
+          return ["validate" => false, "message" => $errors->firstOfAll()];
      } else {
           return ["validate" => true];
      }
