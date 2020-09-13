@@ -2,10 +2,112 @@
 
 use mjohnson\utility\TypeConverter;
 use Rakit\Validation\Validator;
+use FluidXml\FluidXml;
 //utilidades
-function mfSendResponse($response, $message, $data = null, $status = 200)
+function mfCreateXmlMultiObject($response, $details, $status, $data, $nameData = "data", $multidata = false)
 {
-     $json = true;
+     // $data = json_decode(json_encode($data), true);
+     // $data = TypeConverter::toArray($data);
+     $xml = new FluidXml("root");
+     try {
+          $xmlArray = [
+               "RESPONSE" => $response,
+               "DETAILS" => [],
+               "STATUS" => $status,
+               "DATA" => [],
+          ];
+
+          if (is_array($details)) {
+               foreach ($details as $key => $value) {
+                    array_push($xmlArray["DETAILS"], [$key => $value]);
+               }
+          } else {
+               $xmlArray["DETAILS"] = $details;
+          }
+
+          if (is_array($data) || is_object($data)) {
+               if ($multidata) {
+                    $count = 1;
+                    foreach ($data as $key1 => $value1) {
+                         if (is_array($value1)) { //primera hay 2 elementos
+                              $xmlArray["DATA"][$nameData . "-" . $count] = [];
+                              $user = $xmlArray["DATA"][$nameData . "-" . $count]; //primer elemento
+                              //creacion de datos de usuerio
+                              foreach ($value1 as $key2 => $value2) {
+                                   // $xmlArray["DATA"][$nameData."-".$count][$key2] = [];
+                                   if (is_array($value2)) {
+                                        $user[$key2] = [];
+                                        foreach ($value2 as $key3 => $value3) {
+                                             if (is_array($value3)) {
+                                                  $user[$key2][$key3] = [];
+                                                  foreach ($value3 as $key4 => $value4) {
+                                                       if (is_array($value4)) {
+                                                            $user[$key2][$key3] = [];
+                                                            array_push($user[$key2][$key3], [$key4 => $value4]);
+                                                       } else {
+                                                            array_push($user[$key2][$key3], [$key4 => $value4]);
+                                                       }
+                                                  }
+                                             } else {
+                                                  array_push($user[$key2], [$key3 => $value3]);
+                                             }
+                                        }
+                                   } else {
+                                        array_push($user,   [$key2 => $value2]);
+                                   }
+                              }
+
+                              $xmlArray["DATA"][$nameData . "-" . $count] = $user;
+                              //-------------
+                         } else {
+                              array_push($xmlArray["DATA"][$nameData], [$key1 => $value1]);
+                         }
+                         $count++;
+                    }
+               } else {
+                    $xmlArray["DATA"] = [$nameData => []];
+                    foreach ($data as $key1 => $value1) {
+                         if (is_array($value1) || is_object($value1)) { //primera capa
+
+                              if (!empty($value1)) {
+                                   $xmlArray["DATA"][$nameData][$key1] = [];
+                                   $user = $xmlArray["DATA"][$nameData][$key1];
+                                   foreach ($value1 as $key2 => $value2) {
+                                        if (is_array($value2) || is_object($value2)) {
+                                             $user[$key2] = [];
+                                             foreach ($value2 as $key3 => $value3) {
+                                                  if (is_string($value3)) {
+                                                       array_push($user[$key2], [$key3 => $value3]);
+                                                  }
+                                             }
+                                        } else if (is_string($value2)) {
+                                             array_push($user, [$key2 => $value2]);
+                                        }
+                                   }
+                                   $xmlArray["DATA"][$nameData][$key1] = $user;
+                              }
+                         } else if (is_string($value1) || is_int($value1)) {
+                              if ($value1 !== "") {
+                                   array_push($xmlArray["DATA"][$nameData], [$key1 => $value1]);
+                              } else {
+                                   // array_push($xmlArray["DATA"][$nameData], [$key1 => " "]);
+                              }
+                         }
+                    }
+               }
+          } else if (is_string($data)) {
+               $xmlArray["DATA"] = $data;
+          }
+          $xml->add($xmlArray);
+     } catch (\Throwable $th) {
+          $xml->add("Ocurrio en error en la creacion de xml");
+     }
+     return $xml->xml();
+}
+
+function mfSendResponse($response, $message, $status = 200, $data = null, $nameData = "data", $multidata = false)
+{
+     $json = false;
      $typeApp = $json ? "json" : "xml";
      $array = array(
           'RESPONSE' => $response,
@@ -13,12 +115,15 @@ function mfSendResponse($response, $message, $data = null, $status = 200)
           'STATUS' => $status,
           'DATA' => $data,
      );
+
      header("Content-Type: text/$typeApp; charset=utf-8");
      // status_header(intval($status));
-     if ($json)
+     if ($json) {
           return $array;
-     else
-          print(mfArrayToXML($array));
+     } else {
+          $xml = mfCreateXmlMultiObject($response, $message, $status, $data, $nameData, $multidata);
+          print($xml);
+     }
 }
 function mfIsAuthorized($user, $password)
 {
@@ -30,7 +135,7 @@ function mfIsAuthorized($user, $password)
 }
 function mfNotAuthorized()
 {
-     return mfSendResponse(0, "Error en la autenticacion", null, 400);
+     return mfSendResponse(0, "Error en la autenticacion", 400);
 }
 function mfXmlToArray($url)
 {
@@ -127,7 +232,7 @@ function mfUpdateProductWoo($sku, $data)
           return [
                "value" => 2,
                "message" => "Material con sku: $sku actualizado",
-               "data" => json_decode(json_encode($response), true)
+               "data" => $response
           ];
           /*    } */
      } catch (\Throwable $th) {
@@ -226,7 +331,7 @@ function mfUpdateClientWoo($cd_cli, $data)
                if ($response->id !== null) {
                     return [
                          "value" => 2,
-                         "message" => "Todo Bien",
+                         "message" => "Se ha actualizado el Cliente con el id $cd_cli",
                          "data" => $response,
                     ];
                }
@@ -242,11 +347,11 @@ function mfCreateMaterial($params)
           $material = $data["material"];
           $validateMaterial = mfValidateMaterialFields($material); //validacion de security
           if ($validateMaterial["validate"]) {
-               // $created = mfCreateProductWoo($data);
-               // return mfSendResponse($created["value"],$created["message"],$created["data"]);
-               return mfSendResponse(1, "Todo Correcto");
+               $created = mfCreateProductWoo($data);
+               return mfSendResponse($created["value"], $created["message"], 200, $created["data"], "material");
+               // return mfSendResponse(1, "Todo Correcto");
           } else {
-               return mfSendResponse(0, $validateMaterial["message"], null, 400);
+               return mfSendResponse(0, $validateMaterial["message"], 400);
           }
      }, ["security" => "required", "material" => "required"]);
 }
@@ -255,10 +360,10 @@ function mfUpdateMaterial($params)
 {
      $data = mfXmlToArray("php://input"); //recogo data xml
      return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
-          // $sku = $params["sku"];
-          // $updated = mfUpdateProductWoo($sku, $data);
-          // return mfSendResponse($updated["value"],$updated["message"],$updated["data"]);
-          return mfSendResponse(1, "Todo Correcto");
+          $sku = $params["sku"];
+          $updated = mfUpdateProductWoo($sku, $data);
+          return mfSendResponse($updated["value"], $updated["message"], 200, $updated["data"], "material");
+          // return mfSendResponse(1, "Todo Correcto");
      }, ["security" => "required", "material" => "required"]);
 }
 function mfCreateClient($params)
@@ -268,11 +373,11 @@ function mfCreateClient($params)
           $client = $data["client"];
           $validateClient = mfValidateClientFields($client); //validacion de security
           if ($validateClient["validate"]) {
-               // $created = mfCreateClientWoo($data);
-               // return mfSendResponse($created["value"], $created["message"], $created["data"]);
-               return mfSendResponse(1, "Todo Correcto");
+               $created = mfCreateClientWoo($data);
+               return mfSendResponse($created["value"], $created["message"], 200, $created["data"], "client");
+               // return mfSendResponse(1, "Todo Correcto");
           } else {
-               return mfSendResponse(0, $validateClient["message"], null, 400);
+               return mfSendResponse(0, $validateClient["message"], 400);
           }
      }, ["security" => "required", "client" => "required"]);
 }
@@ -282,7 +387,7 @@ function mfUpdateClient($params)
      return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
           $cd_cli = $params["cd_cli"];
           $updated = mfUpdateClientWoo($cd_cli, $data);
-          return mfSendResponse($updated["value"], $updated["message"], $updated["data"]);
+          return mfSendResponse($updated["value"], $updated["message"], 200, $updated["data"], "client");
      }, ["security" => "required", "client" => "required"]);
 }
 
@@ -336,10 +441,10 @@ function mfValidationGeneralAuth($data, $params = null, $function, $validations 
                     return mfNotAuthorized();
                }
           } else {
-               return mfSendResponse(0, $validateSecurity["message"], null, 400);
+               return mfSendResponse(0, $validateSecurity["message"], 400, null);
           }
      } else {
-          return mfSendResponse(0, $validateBody["message"], null, 400);
+          return mfSendResponse(0, $validateBody["message"],  400, null);
      }
 }
 function mfValidateDataEmpty($data, $validations)
@@ -376,7 +481,7 @@ function mfValidateClientFields($client)
      return mfUtilityValidator($client, [
           'cd_cli' => 'required|max:10',
           'name' => 'required|max:40',
-          'telephone' => 'required|max:9',
+          'telephone' => 'required|min:9|max:9',
           'email' => 'required|max:30|email',
           'address' => 'required|max:70',
      ]);
