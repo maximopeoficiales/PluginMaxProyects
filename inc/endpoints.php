@@ -4,6 +4,11 @@ use mjohnson\utility\TypeConverter;
 use Rakit\Validation\Validator;
 use FluidXml\FluidXml;
 //utilidades
+function mfEncriptMD5($cadena)
+{
+     $hoy = str_replace(" ", "", gmdate('Y-m-d h:i:s ', time()));
+     return  substr(md5($cadena . $hoy), 0, 8);
+}
 function mfCreateXmlMultiObject($response, $details, $status, $data, $nameData = "data", $multidata = false)
 {
      // $data = json_decode(json_encode($data), true);
@@ -248,6 +253,7 @@ function mfCreateClientWoo($data)
      $woo = max_functions_getWoocommerce();
      $client = $data["client"];
      $email = $client["email"];
+     $id_cli=mfEncriptMD5($email);
      $dataSend = [
           'first_name' => $client["name"],
           'email' => $email,
@@ -260,7 +266,7 @@ function mfCreateClientWoo($data)
           "meta_data" =>  [
                [
                     "key" => "cd_cli",
-                    "value" => $client['cd_cli']
+                    "value" =>$id_cli 
                ]
           ]
 
@@ -272,7 +278,8 @@ function mfCreateClientWoo($data)
                "message" => "EL email: $email ya existe",
           ];
      } else {
-          $response = $woo->post('customers', $dataSend); //devuelve un objeto
+          $response = $woo->post('customers', $dataSend);
+          $response->id_cli=$id_cli; //devuelve un objeto
           if ($response->id !== null) {
                return [
                     "value" => 1,
@@ -286,7 +293,7 @@ function mfUpdateClientWoo($cd_cli, $data)
 {
      global $wpdb;
      $table = $wpdb->base_prefix . 'usermeta';
-     $sql = "SELECT user_id FROM $table WHERE meta_key = 'cd_cli' and meta_value= '%d' LIMIT 1";
+     $sql = "SELECT user_id FROM $table WHERE meta_key = 'cd_cli' and meta_value= %d LIMIT 1";
      $result = $wpdb->get_results($wpdb->prepare($sql, $cd_cli));
      if (empty($result)) {
           return [
@@ -420,7 +427,7 @@ add_action("rest_api_init", function () {
 });
 // http://maxco.punkuhr.test/wp-json/max_functions/v1/clients/cd_cli (PUT)
 add_action("rest_api_init", function () {
-     register_rest_route("max_functions/v1", "/clients/(?P<cd_cli>\d+)", array(
+     register_rest_route("max_functions/v1", "/clients/(?P<cd_cli>[a-zA-Z0-9-]+)", array(
           "methods" => "PUT",
           "callback" => "mfUpdateClient",
           'args'            => array(),
@@ -479,7 +486,6 @@ function mfValidateMaterialFields($material)
 function mfValidateClientFields($client)
 {
      return mfUtilityValidator($client, [
-          'cd_cli' => 'required|max:10',
           'name' => 'required|max:40',
           'telephone' => 'required|min:9|max:9',
           'email' => 'required|max:30|email',
