@@ -11,7 +11,7 @@ function mfEncriptMD5($cadena)
 }
 function mfCreateXmlMultiObject($response, $details, $status, $data, $nameData = "data", $multidata = false)
 {
-     // $data = json_decode(json_encode($data), true);
+     // $data = json_decode(data);
      // $data = TypeConverter::toArray($data);
      $xml = new FluidXml("root");
      try {
@@ -34,38 +34,37 @@ function mfCreateXmlMultiObject($response, $details, $status, $data, $nameData =
                if ($multidata) {
                     $count = 1;
                     foreach ($data as $key1 => $value1) {
-                         if (is_array($value1)) { //primera hay 2 elementos
-                              $xmlArray["DATA"][$nameData . "-" . $count] = [];
-                              $user = $xmlArray["DATA"][$nameData . "-" . $count]; //primer elemento
-                              //creacion de datos de usuerio
-                              foreach ($value1 as $key2 => $value2) {
-                                   // $xmlArray["DATA"][$nameData."-".$count][$key2] = [];
-                                   if (is_array($value2)) {
-                                        $user[$key2] = [];
+                         $productN = $nameData . "-" . $count;
+                         $xmlArray["DATA"][$productN] = [];
+                         if (is_array($value1) || is_object($value1)) {
+                              foreach ($value1 as $key2 => $value2) { //primera fase completa
+                                   if (is_array($value2) || is_object($value2)) {
+                                        $xmlArray["DATA"][$productN][$key2] = [];
                                         foreach ($value2 as $key3 => $value3) {
-                                             if (is_array($value3)) {
-                                                  $user[$key2][$key3] = [];
+                                             if (is_array($value3) || is_object($value3)) {
+                                                  $xmlArray["DATA"][$productN][$key2][$key3] = [];
                                                   foreach ($value3 as $key4 => $value4) {
-                                                       if (is_array($value4)) {
-                                                            $user[$key2][$key3] = [];
-                                                            array_push($user[$key2][$key3], [$key4 => $value4]);
-                                                       } else {
-                                                            array_push($user[$key2][$key3], [$key4 => $value4]);
+                                                       if (is_array($value4) || is_object($value4)) {
+                                                            foreach ($value4 as $key5 => $value5) {
+                                                                 $xmlArray["DATA"][$productN][$key2][$key3][$key4] = [];
+                                                                 if (is_array($value5) || is_object($value5)) {
+
+                                                                 } else if (is_string($value5)  && $value5 !== "") {
+                                                                      array_push($xmlArray["DATA"][$productN][$key2][$key3][$key4], [$key5 => $value5]);
+                                                                 }
+                                                            }
+                                                       } else if (is_string($value4)  && $value4 !== "") {
+                                                            array_push($xmlArray["DATA"][$productN][$key2][$key3], [$key4 => $value4]);
                                                        }
                                                   }
-                                             } else {
-                                                  array_push($user[$key2], [$key3 => $value3]);
+                                             } else if (is_string($value3)  && $value3 !== "") {
+                                                  array_push($xmlArray["DATA"][$productN][$key2], [$key3 => $value3]);
                                              }
                                         }
-                                   } else {
-                                        array_push($user,   [$key2 => $value2]);
+                                   } else if (is_string($value2)  && $value2 !== "") {
+                                        array_push($xmlArray["DATA"][$productN], [$key2 => $value2]);
                                    }
                               }
-
-                              $xmlArray["DATA"][$nameData . "-" . $count] = $user;
-                              //-------------
-                         } else {
-                              array_push($xmlArray["DATA"][$nameData], [$key1 => $value1]);
                          }
                          $count++;
                     }
@@ -120,7 +119,7 @@ function mfSendResponse($response, $message, $status = 200, $data = null, $nameD
           'DATA' => $data,
      );
 
-     header("Content-Type: text/$typeApp; charset=utf-8");
+     header("Content-Type: application/$typeApp; charset=utf-8");
      // status_header(intval($status));
      if ($json) {
           return $array;
@@ -380,6 +379,11 @@ function mfUpdateClientWoo($cd_cli, $data)
 }
 
 //callbacks de endpoints
+function mfGetMaterial($params)
+{
+     $woo = max_functions_getWoocommerce();
+     return mfSendResponse(1, "Todo correcto", 200, $woo->get("products"), "product", true);
+}
 function mfCreateMaterial($params)
 {
      $data = mfXmlToArray("php://input"); //recogo data xml
@@ -441,6 +445,14 @@ add_action("rest_api_init", function () {
           'args'            => array(),
      ));
 });
+//get materials
+add_action("rest_api_init", function () {
+     register_rest_route("max_functions/v1", "/materials", array(
+          "methods" => "GET",
+          "callback" => "mfGetMaterial",
+          'args'            => array(),
+     ));
+});
 // http://maxco.punkuhr.test/wp-json/max_functions/v1/materials/sku (PUT)
 add_action("rest_api_init", function () {
      register_rest_route("max_functions/v1", "/materials/(?P<sku>\d+)", array(
@@ -466,6 +478,7 @@ add_action("rest_api_init", function () {
           'args'            => array(),
      ));
 });
+
 
 //validations
 function mfValidationGeneralAuth($data, $params = null, $function, $validations = [])
