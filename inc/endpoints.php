@@ -48,7 +48,6 @@ function mfCreateXmlMultiObject($response, $details, $status, $data, $nameData =
                                                             foreach ($value4 as $key5 => $value5) {
                                                                  $xmlArray["DATA"][$productN][$key2][$key3][$key4] = [];
                                                                  if (is_array($value5) || is_object($value5)) {
-
                                                                  } else if (is_string($value5)  && $value5 !== "") {
                                                                       array_push($xmlArray["DATA"][$productN][$key2][$key3][$key4], [$key5 => $value5]);
                                                                  }
@@ -381,8 +380,68 @@ function mfUpdateClientWoo($cd_cli, $data)
 //callbacks de endpoints
 function mfGetMaterial($params)
 {
-     $woo = max_functions_getWoocommerce();
-     return mfSendResponse(1, "Todo correcto", 200, $woo->get("products"), "product", true);
+     $data = mfXmlToArray("php://input"); //recogo data xml
+     return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
+          try {
+               $after = str_replace(" ", "T", $params->get_param("after"));
+               // $before = str_replace(" ", "T", $params->get_param("before"));
+               $woo = max_functions_getWoocommerce();
+               return mfSendResponse(1, "Todo correcto", 200, $woo->get("products", [
+                    "order" => "asc",
+                    "orderby" => "date",
+                    "after" => $after,
+                    // "before" => $before,
+                    "per_page" => 100
+               ]), "material", true);
+          } catch (\Throwable $th) {
+               $error = ["ERROR" => "The date format is not valid example correct: 2020-07-29 10:01:60"];
+               return mfSendResponse(1, "Todo correcto", 200, $error);
+          }
+     }, ["security" => "required"]);
+}
+function mfGetClientWoo($after)
+{
+     global $wpdb;
+     $clients = [];
+     $table = $wpdb->base_prefix . 'users';
+     $sql = "SELECT id FROM $table WHERE user_registered >= %s ";
+     $resultIds = $wpdb->get_results($wpdb->prepare($sql, $after));
+     if (empty($resultIds)) {
+          return [
+               "value" => 0,
+               "message" => "There are no registered customers as of this date: $after",
+          ];
+     } else {
+          for ($i = 0; $i < count($resultIds); $i++) {
+               $idClient = $resultIds[$i]->id;
+               $woo = max_functions_getWoocommerce();
+               $currentClient = $woo->get("customers/$idClient");
+               $cd_cli = "";
+               foreach ($currentClient->meta_data as $value) {
+                    if ($value->key == "cd_cli") {
+                         $cd_cli = $value->value;
+                    }
+               }
+               $currentClient = get_object_vars($currentClient);
+               $currentClient["cd_cli"] = $cd_cli;
+               array_push($clients, $currentClient);
+          }
+          return $clients;
+          // return $resultIds;
+     }
+}
+function mfGetClients($params)
+{
+     $data = mfXmlToArray("php://input"); //recogo data xml
+     return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
+          try {
+               $after = $params->get_param("after");
+               return mfSendResponse(1, "Todo correcto", 200, mfGetClientWoo($after), "client", true);
+          } catch (\Throwable $th) {
+               $error = ["ERROR" => "The date format is not valid example correct: 2020-07-29 10:01:60"];
+               return mfSendResponse(3, "Ocurrio un error", 200, $error);
+          }
+     }, ["security" => "required"]);
 }
 function mfCreateMaterial($params)
 {
@@ -446,10 +505,20 @@ add_action("rest_api_init", function () {
      ));
 });
 //get materials
+// http://maxco.punkuhr.test/wp-json/max_functions/v1/materials
 add_action("rest_api_init", function () {
-     register_rest_route("max_functions/v1", "/materials", array(
-          "methods" => "GET",
+     register_rest_route("max_functions/v1", "/getmaterials", array(
+          "methods" => "POST",
           "callback" => "mfGetMaterial",
+          'args'            => array(),
+     ));
+});
+//get clients for date
+// http://maxco.punkuhr.test/wp-json/max_functions/v1/clients
+add_action("rest_api_init", function () {
+     register_rest_route("max_functions/v1", "/getclients", array(
+          "methods" => "POST",
+          "callback" => "mfGetClients",
           'args'            => array(),
      ));
 });

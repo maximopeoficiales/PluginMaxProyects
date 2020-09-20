@@ -1,6 +1,6 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
-error_reporting(0);
+// error_reporting(0);
 
 /* 
      Plugin Name: Max Functions 
