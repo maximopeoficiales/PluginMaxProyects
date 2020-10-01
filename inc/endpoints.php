@@ -191,35 +191,53 @@ function mfUpdateMaterialWithSku($sku, $dataUpdated)
      $response = $woo->put("products/" . $findMaterial[0]->id, $dataUpdated);
      return $response;
 }
-function mfCreateMaterialWoo($data)
+function mfCreateMaterialWoo($material)
 {
 
      $woo = max_functions_getWoocommerce();
-     $material = $data["material"];
-     $weight = number_format($material["weight"], 2, ".", "");
-     $sku = $material["sku"];
+     $weight = number_format($material["peso"], 2, ".", "");
+     $sku = $material["id_mat"];
      $dataSend = [
-          'name' => $material["name"],
+          'name' => $material["nomb"],
           'sku' => $sku,
           'weight' => $weight,
           "metadata" => [],
      ];
-     if ($material["unit"] !== "kg") {
+     if ($material["und"] !== "kg") {
           $dataSend["meta_data"] = [
                [
-                    "key" => "unit",
-                    "value" => $material['unit'] . ":" . $weight
+                    "key" => "und",
+                    "value" => $material['und'],
+               ],
+               [
+                    "key" => "und_value",
+                    "value" =>  $weight,
                ]
           ];
      }
      array_push($dataSend["meta_data"], [
-          "key" => "mt_hierarchy", "value" => $material['mt_hierarchy']
+          "key" => "id_soc", "value" => $material['id_soc']
      ]);
+     array_push($dataSend["meta_data"], [
+          "key" => "cent", "value" => $material['cent']
+     ]);
+     array_push($dataSend["meta_data"], [
+          "key" => "alm", "value" => $material['alm']
+     ]);
+     array_push($dataSend["meta_data"], [
+          "key" => "jprod", "value" => $material['jprod']
+     ]);
+
 
      try {
           $response = $woo->post('products', $dataSend); //devuelve un objeto
-          $response->mt_hierarchy = $material['mt_hierarchy'];
-          $response->unit_material = $material['unit'] . ":" . $weight;
+          $response->id_soc = $material['id_soc'];
+          $response->cent = $material['cent'];
+          $response->alm = $material['alm'];
+          $response->alm = $material['alm'];
+          $response->jprod = $material['jprod'];
+          $response->und = $material['und'];
+          $response->peso = $weight;
           if (!$response->id == null) {
                return [
                     "value" => 1,
@@ -234,37 +252,55 @@ function mfCreateMaterialWoo($data)
           ];
      }
 }
-function mfUpdateMaterialWoo($sku, $data)
+function mfUpdateMaterialWoo($sku, $material)
 {
      try {
 
-          $material = $data["material"];
-          $weight = number_format($material["weight"], 2, ".", "");
-          $sku = $material["sku"];
+          $weight = number_format($material["peso"], 2, ".", "");
+          // $sku = $material["sku"];
           $id_cliente = mfGetIdMaterialWithSku($sku);
           $metadata = [
                [
-                    "key" => "unit", "value" => $material['unit'] . ":" . $weight
+                    "key" => "jprod", "value" => $material['jprod']
                ],
                [
-                    "key" => "mt_hierarchy", "value" => $material['mt_hierarchy']
+                    "key" => "alm", "value" => $material['alm']
+               ],
+               [
+                    "key" => "cent", "value" => $material['cent']
+               ],
+               [
+                    "key" => "id_soc", "value" => $material['id_soc']
+               ],
+               [
+                    "key" => "und", "value" => $material['und']
+               ],
+               [
+                    "key" => "und_value", "value" => $weight
+               ],
+               [
+                    "key" => "jprod", "value" => $material['jprod']
                ]
           ];
           mfUpdateMetadataMaterial($id_cliente, $metadata);
           $dataUpdated = [
-               'name' => $material["name"],
-               'sku' => $sku,
+               'name' => $material["nomb"],
                'weight' => $weight,
                "manage_stock" => true,
-               "stock_quantity" => $material["stock"],
+               "stock_quantity" => $material["stck"],
           ];
-          if ($material["stock"] == 0) {
+          if ($material["stck"] == 0) {
                $dataUpdated["manage_stock"] = false;
           }
           //updated
           $response = mfUpdateMaterialWithSku($sku, $dataUpdated);
-          $response->mt_hierarchy = $material['mt_hierarchy'];
-          $response->unit_material = $material['unit'] . ":" . $weight;
+          $response->id_soc = $material['id_soc'];
+          $response->cent = $material['cent'];
+          $response->alm = $material['alm'];
+          $response->und = $material['und'];
+          $response->peso = $weight;
+          $response->jprod = $material['jprod'];
+          $response->stck = $material['stck'];
           return [
                "value" => 2,
                "message" => "Material con sku: $sku actualizado",
@@ -450,7 +486,7 @@ function mfCreateMaterial($params)
           $material = $data["material"];
           $validateMaterial = mfValidateMaterialFields($material); //validacion de security
           if ($validateMaterial["validate"]) {
-               $created = mfCreateMaterialWoo($data);
+               $created = mfCreateMaterialWoo($material);
                return mfSendResponse($created["value"], $created["message"], 200, $created["data"], "material");
                // return mfSendResponse(1, "Todo Correcto");
           } else {
@@ -464,9 +500,15 @@ function mfUpdateMaterial($params)
      $data = mfXmlToArray("php://input"); //recogo data xml
      return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
           $sku = $params["sku"];
-          $updated = mfUpdateMaterialWoo($sku, $data);
-          return mfSendResponse($updated["value"], $updated["message"], 200, $updated["data"], "material");
-          // return mfSendResponse(1, "Todo Correcto");
+          $material = $data["material"];
+          $validateMaterial = mfValidateMaterialFields($material, true); //validacion de security
+          if ($validateMaterial["validate"]) {
+               $updated = mfUpdateMaterialWoo($sku, $material);
+               return mfSendResponse($updated["value"], $updated["message"], 200, $updated["data"], "material");
+               // return mfSendResponse(1, "Todo Correcto", 200, $material);
+          } else {
+               return mfSendResponse(0, $validateMaterial["message"], 400);
+          }
      }, ["security" => "required", "material" => "required"]);
 }
 function mfCreateClient($params)
@@ -589,15 +631,24 @@ function mfValidateSecurityFields($security)
           'pass'              => 'required|max:13',
      ]);
 }
-function mfValidateMaterialFields($material)
+function mfValidateMaterialFields($material, $update = false)
 {
-     return mfUtilityValidator($material, [
-          'sku'                  => 'required|max:12',
-          'name'              => 'required|max:40',
-          'unit'              => 'required|max:3',
-          'weight'              => 'required|max:6',
-          'mt_hierarchy'              => 'required|numeric',
-     ]);
+     $validations = [
+          'id_soc'                  => 'required|max:4',
+          'id_mat'                  => 'required|max:12',
+          'cent'                  => 'required|max:4',
+          'alm'                  => 'required|max:4',
+          'nomb'              => 'required|max:40',
+          'und'              => 'required|max:3',
+          'peso'              => 'required|max:6',
+          'jprod'              => 'required|max:20',
+     ];
+     if ($update) {
+          $validations["stck"] = 'required|max:5';
+          $validations["id_mat"] = '';
+     }
+
+     return mfUtilityValidator($material, $validations);
 }
 function mfValidateClientFields($client)
 {
