@@ -151,6 +151,14 @@ function mfArrayToXML($data)
      $data = TypeConverter::toXml($data);
      return $data;
 }
+function mfAddNewFieldsMetadata($dataCurrent, $fields)
+{
+     $metadata = [];
+     foreach ($fields as $value) {
+          array_push($metadata, ["key" => $value, "value" => $dataCurrent[$value]]);
+     }
+     return $metadata;
+}
 //funciones que retorna respuesta
 function mfUpdateMetadataMaterial($id_cliente, $data)
 {
@@ -201,7 +209,7 @@ function mfCreateMaterialWoo($material)
           'name' => $material["nomb"],
           'sku' => $sku,
           'weight' => $weight,
-          "metadata" => [],
+          "meta_data" => [],
      ];
      if ($material["und"] !== "kg") {
           $dataSend["meta_data"] = [
@@ -215,30 +223,17 @@ function mfCreateMaterialWoo($material)
                ]
           ];
      }
-     array_push($dataSend["meta_data"], [
-          "key" => "id_soc", "value" => $material['id_soc']
-     ]);
-     array_push($dataSend["meta_data"], [
-          "key" => "cent", "value" => $material['cent']
-     ]);
-     array_push($dataSend["meta_data"], [
-          "key" => "alm", "value" => $material['alm']
-     ]);
-     array_push($dataSend["meta_data"], [
-          "key" => "jprod", "value" => $material['jprod']
-     ]);
-
-
+     $newfields = ["id_soc", "cent", "alm", "jprod"];
+     foreach (mfAddNewFieldsMetadata($material, $newfields) as  $value) {
+          array_push($dataSend["meta_data"], $value);
+     }
      try {
           $response = $woo->post('products', $dataSend); //devuelve un objeto
-          $response->id_soc = $material['id_soc'];
-          $response->cent = $material['cent'];
-          $response->alm = $material['alm'];
-          $response->alm = $material['alm'];
-          $response->jprod = $material['jprod'];
-          $response->und = $material['und'];
+          foreach ($dataSend["meta_data"] as  $mt) {
+               $response->{$mt["key"]} = $mt["value"];
+          }
           $response->peso = $weight;
-          if (!$response->id == null) {
+          if ($response->id !== null) {
                return [
                     "value" => 1,
                     "data" => $response,
@@ -259,29 +254,11 @@ function mfUpdateMaterialWoo($sku, $material)
           $weight = number_format($material["peso"], 2, ".", "");
           // $sku = $material["sku"];
           $id_cliente = mfGetIdMaterialWithSku($sku);
-          $metadata = [
-               [
-                    "key" => "jprod", "value" => $material['jprod']
-               ],
-               [
-                    "key" => "alm", "value" => $material['alm']
-               ],
-               [
-                    "key" => "cent", "value" => $material['cent']
-               ],
-               [
-                    "key" => "id_soc", "value" => $material['id_soc']
-               ],
-               [
-                    "key" => "und", "value" => $material['und']
-               ],
-               [
-                    "key" => "und_value", "value" => $weight
-               ],
-               [
-                    "key" => "jprod", "value" => $material['jprod']
-               ]
-          ];
+          $metadata = [];
+          $newfields = ["id_soc", "cent", "alm", "jprod", "und_value", "und"];
+          foreach (mfAddNewFieldsMetadata($material, $newfields) as  $value) {
+               array_push($metadata, $value);
+          }
           mfUpdateMetadataMaterial($id_cliente, $metadata);
           $dataUpdated = [
                'name' => $material["nomb"],
@@ -294,13 +271,10 @@ function mfUpdateMaterialWoo($sku, $material)
           }
           //updated
           $response = mfUpdateMaterialWithSku($sku, $dataUpdated);
-          $response->id_soc = $material['id_soc'];
-          $response->cent = $material['cent'];
-          $response->alm = $material['alm'];
-          $response->und = $material['und'];
+          foreach ($metadata as  $value) {
+               $response->{$value["key"]} = $value["value"];
+          }
           $response->peso = $weight;
-          $response->jprod = $material['jprod'];
-          $response->stck = $material['stck'];
           return [
                "value" => 2,
                "message" => "Material con sku: $sku actualizado",
@@ -466,14 +440,12 @@ function mfGetClientWoo($after)
                $idClient = $resultIds[$i]->id;
                $woo = max_functions_getWoocommerce();
                $currentClient = $woo->get("customers/$idClient");
-               $cd_cli = "";
                foreach ($currentClient->meta_data as $value) {
                     $currentClient->{$value->key} = $value->value;
                }
                array_push($clients, $currentClient);
           }
           return $clients;
-          // return $resultIds;
      }
 }
 function mfGetClients($params)
@@ -566,7 +538,7 @@ add_action("rest_api_init", function () {
      ));
 });
 //get clients for date
-// http://maxco.punkuhr.test/wp-json/max_functions/v1/clients
+// http://maxco.punkuhr.test/wp-json/max_functions/v1/clients?after=2020-09-10 22:00:22&before=2020-09-1409:08:59
 add_action("rest_api_init", function () {
      register_rest_route("max_functions/v1", "/getclients", array(
           "methods" => "POST",
