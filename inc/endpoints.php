@@ -432,7 +432,13 @@ function mfGetMaterial($params)
                     if ($params->get_param("before") !== null) {
                          $filters["before"] = str_replace(" ", "T", $before);
                     }
-                    return mfSendResponse(1, "Todo correcto", 200, $woo->get("products", $filters), "material", true);
+                    $response = $woo->get("products", $filters);
+                    foreach ($response as $material) {
+                         foreach ($material->meta_data  as  $mt) {
+                              $material->{$mt->key} = $mt->value;
+                         }
+                    }
+                    return mfSendResponse(1, "Todo correcto", 200, $response, "material", true);
                } catch (\Throwable $th) {
                     $error = ["ERROR" => "The date format is not valid example correct: 2020-07-29 10:01:60"];
                     return mfSendResponse(0, "Ocurrio un Error", 404, $error);
@@ -462,12 +468,8 @@ function mfGetClientWoo($after)
                $currentClient = $woo->get("customers/$idClient");
                $cd_cli = "";
                foreach ($currentClient->meta_data as $value) {
-                    if ($value->key == "cd_cli") {
-                         $cd_cli = $value->value;
-                    }
+                    $currentClient->{$value->key} = $value->value;
                }
-               $currentClient = get_object_vars($currentClient);
-               $currentClient["cd_cli"] = $cd_cli;
                array_push($clients, $currentClient);
           }
           return $clients;
