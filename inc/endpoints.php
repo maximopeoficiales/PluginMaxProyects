@@ -418,20 +418,28 @@ function mfGetMaterial($params)
 {
      $data = mfXmlToArray("php://input"); //recogo data xml
      return  mfValidationGeneralAuth($data, $params, function ($data, $params) {
-          try {
-               $after = str_replace(" ", "T", $params->get_param("after"));
-               // $before = str_replace(" ", "T", $params->get_param("before"));
-               $woo = max_functions_getWoocommerce();
-               return mfSendResponse(1, "Todo correcto", 200, $woo->get("products", [
-                    "order" => "asc",
-                    "orderby" => "date",
-                    "after" => $after,
-                    // "before" => $before,
-                    "per_page" => 100
-               ]), "material", true);
-          } catch (\Throwable $th) {
-               $error = ["ERROR" => "The date format is not valid example correct: 2020-07-29 10:01:60"];
-               return mfSendResponse(1, "Todo correcto", 200, $error);
+          $after = $params->get_param("after");
+          $before = $params->get_param("before");
+          if ($after !== null) {
+               try {
+                    $woo = max_functions_getWoocommerce();
+                    $filters = [
+                         "order" => "asc",
+                         "orderby" => "date",
+                         "after" =>  str_replace(" ", "T", $after),
+                         "per_page" => 100
+                    ];
+                    if ($params->get_param("before") !== null) {
+                         $filters["before"] = str_replace(" ", "T", $before);
+                    }
+                    return mfSendResponse(1, "Todo correcto", 200, $woo->get("products", $filters), "material", true);
+               } catch (\Throwable $th) {
+                    $error = ["ERROR" => "The date format is not valid example correct: 2020-07-29 10:01:60"];
+                    return mfSendResponse(0, "Ocurrio un Error", 404, $error);
+               }
+          } else {
+               $error = ["ERROR" => "Please send the parameters"];
+               return mfSendResponse(0, "Ocurrio un Error", 404, $error);
           }
      }, ["security" => "required"]);
 }
@@ -547,7 +555,7 @@ add_action("rest_api_init", function () {
      ));
 });
 //get materials
-// http://maxco.punkuhr.test/wp-json/max_functions/v1/materials
+// http://maxco.punkuhr.test/wp-json/max_functions/v1/getmaterials?after=2020-09-10 22:00:22&before=2020-09-1409:08:59
 add_action("rest_api_init", function () {
      register_rest_route("max_functions/v1", "/getmaterials", array(
           "methods" => "POST",
