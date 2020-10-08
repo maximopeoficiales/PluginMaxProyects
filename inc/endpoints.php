@@ -223,27 +223,35 @@ function mfCreateMaterialWoo($material)
                ]
           ];
      }
-     $newfields = ["id_soc", "cent", "alm", "jprod"];
-     foreach (mfAddNewFieldsMetadata($material, $newfields) as  $value) {
-          array_push($dataSend["meta_data"], $value);
-     }
-     try {
-          $response = $woo->post('products', $dataSend); //devuelve un objeto
-          foreach ($dataSend["meta_data"] as  $mt) {
-               $response->{$mt["key"]} = $mt["value"];
+     $id_soc = $material["id_soc"];
+     if ($id_soc == "MAX") {
+          $newfields = ["id_soc", "cent", "alm", "jprod"];
+          foreach (mfAddNewFieldsMetadata($material, $newfields) as  $value) {
+               array_push($dataSend["meta_data"], $value);
           }
-          $response->peso = $weight;
-          if ($response->id !== null) {
+          try {
+               $response = $woo->post('products', $dataSend); //devuelve un objeto
+               foreach ($dataSend["meta_data"] as  $mt) {
+                    $response->{$mt["key"]} = $mt["value"];
+               }
+               $response->peso = $weight;
+               if ($response->id !== null) {
+                    return [
+                         "value" => 1,
+                         "data" => $response,
+                         "message" => "Registro de Material Exitoso",
+                    ];
+               }
+          } catch (\Throwable $th) {
                return [
-                    "value" => 1,
-                    "data" => $response,
-                    "message" => "Registro de Material Exitoso",
+                    "value" => 0,
+                    "message" => "EL SKU: $sku ya existe",
                ];
           }
-     } catch (\Throwable $th) {
+     } else {
           return [
                "value" => 0,
-               "message" => "EL SKU: $sku ya existe",
+               "message" => "El id_soc: $id_soc no coincide con nuestra sociedad",
           ];
      }
 }
