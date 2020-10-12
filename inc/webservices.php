@@ -3,7 +3,7 @@
 function mfShowWsdl()
 {
      header("Content-Type: application/xml");
-     require __DIR__ . "/../../../../webservices/example.wsdl";
+     require get_home_path() . "/webservices/example.wsdl";
 }
 
 

@@ -590,7 +590,7 @@ function mfValidationGeneralAuth($data, $params = null, $function, $validations 
           $validateSecurity = mfValidateSecurityFields($security); //validacion de security
           if ($validateSecurity["validate"]) {
                if (mfIsAuthorized($security["user"], $security["pass"])) {
-                    return $function($data, $params);
+                    return $function($data);
                } else {
                     return mfNotAuthorized();
                }
@@ -633,11 +633,6 @@ function mfValidateMaterialFields($material, $update = false)
           'peso'              => 'required|max:6',
           'jprod'              => 'required|max:20',
      ];
-     if ($update) {
-          $validations["stck"] = 'required|max:5';
-          $validations["id_mat"] = '';
-     }
-
      return mfUtilityValidator($material, $validations);
 }
 function mfValidateClientFields($client)
