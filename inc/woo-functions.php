@@ -586,16 +586,39 @@ function max_function_webhook_custom($http_args, $response, $duration, $arg, $id
      $data = $http_args["body"];
      execWebHook($data, $urlSend);
 }
-function action_woocommerce_after_checkout_billing_form($wccs_custom_checkout_field_pro)
-{     ?>
-     <div class="btn-group text-center" style="text-align:center; margin-bottom:10px;  margin-top:10px;display: flex;justify-content:center  !important;align-items:center !important;" role="group">
-          <button type="button" class="btn btn-secondary mr-2" id="miubicacion"><i class="fas fa-map-marker-alt fa-fw"></i>Mi Ubicacion</button>
-          <button type="button" class="btn btn-secondary ml-2" id="buscar"><i class="fas fa-search-location fa-fw"></i>Buscar</button>
-     </div>
-     <div style="width: 100%; height: 480px" id="map-canvas"></div>
-<?php
-};
-add_action('woocommerce_after_checkout_billing_form', 'action_woocommerce_after_checkout_billing_form', 10, 1);
+/**
+Añadir comentario luego de la direccion 
+para que ingresen el mapa
+ */
+add_action( 'woocommerce_form_field_text','additional_paragraph_after_billing_address_1', 10, 4 );
+function additional_paragraph_after_billing_address_1( $field, $key, $args, $value ){
+    if ( is_checkout() && $key == 'billing_address_1' ) {
+        $field .= '<p class="form-row red_text" style="color:red;">
+        Ingresa tu dirección y pon "Buscar" o usa el mapa para ubicar tu dirección de envío</p>
+        ';
+    
+     }
+    return $field;
+}
+/* se añadio mapa debajo del campo direccion */
+add_action( 'woocommerce_form_field_text','additional_paragraph_after_billing_address_12', 10, 4 );
+function additional_paragraph_after_billing_address_12( $field, $key, $args, $value ){
+    if ( is_checkout() && $key == 'billing_address_1' ) {
+     $field .= '
+     <div class="form-row  btn-group text-center" style="text-align:center; margin-bottom:10px;  margin-top:10px;display: flex;justify-content:center  !important;align-items:center !important;" role="group">
+         <button type="button" class="btn btn-secondary mr-2" id="miubicacion"><i class="fas fa-map-marker-alt fa-fw"></i>Mi Ubicacion</button>         <button type="button" class="btn btn-secondary ml-2" id="buscar"><i class="fas fa-search-location fa-fw"></i>Buscar</button>
+         </div>
+         <div class="form-row" style="width: 100%; height: 480px" id="map-canvas"></div>
+     ';
+    
+     }
+    return $field;
+}
+ 
+/* --------------- */
+// function action_woocommerce_after_checkout_billing_form($wccs_custom_checkout_field_pro)
+
+// add_action('woocommerce_after_checkout_billing_form', 'action_woocommerce_after_checkout_billing_form', 10, 1);
 
 function me_post_pdf()
 {
