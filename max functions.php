@@ -74,4 +74,3 @@ add_action('init', 'max_functions_init', 0);
 
 require 'inc/woo-functions.php';
 require 'inc/endpoints.php';
-require 'inc/webservices.php';
